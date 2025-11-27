@@ -7,11 +7,14 @@ import json
 import platform
 from pathlib import Path
 from multiprocessing import Value, Lock
+from datetime import datetime, timezone
+from email.utils import formatdate
 
 HOST = "0.0.0.0"
 PORT = 8080
 BUFFER_SIZE = 4096
 PUBLIC_DIR = "public"
+SERVER_NAME = "PythonHTTPServer/1.0"
 
 # Detectar sistema operativo
 IS_UNIX_LIKE = platform.system() in ['Linux', 'Darwin', 'FreeBSD', 'OpenBSD']
@@ -26,6 +29,11 @@ SERVER_MODE = "threading"  # threading o forking
 
 
 class HTTPRequestHandler(socketserver.BaseRequestHandler):
+    """
+    Handler HTTP/1.1 que implementa GET y HEAD según RFC 9110
+    https://www.rfc-editor.org/rfc/rfc9110.html
+    """
+    
     def handle(self):
         start_time = time.time()
 
@@ -36,73 +44,159 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
 
             request = data_bytes.decode("utf-8")
             lines = request.split("\r\n")
+            
+            # Parsear línea de petición (RFC 9110 Section 3.1)
             request_line = lines[0].split()
 
             if len(request_line) < 3:
-                self.send_response(400, "Bad Request")
+                self.send_error_response(400, "Bad Request")
                 return
 
-            method, path, _ = request_line
+            method, path, http_version = request_line
+            
+            # Parsear headers de la petición
+            headers = self.parse_headers(lines[1:])
+            
+            # Log de la petición
+            client_ip = self.client_address[0]
+            print(f"[{SERVER_MODE}] {client_ip} - {method} {path} {http_version}")
 
-            if method != "GET":
-                self.send_response(405, "Method Not Allowed")
+            # Métodos soportados: GET y HEAD (RFC 9110 Section 9.3)
+            if method == "GET":
+                self.handle_get(path, include_body=True)
+            elif method == "HEAD":
+                # HEAD es igual a GET pero sin body (RFC 9110 Section 9.3.2)
+                self.handle_get(path, include_body=False)
+            else:
+                self.send_error_response(405, "Method Not Allowed")
                 return
-
-            self.handle_get(path)
 
         except Exception as e:
             print(f"[Error] {e}")
-            self.send_response(500, "Internal Server Error")
+            self.send_error_response(500, "Internal Server Error")
 
         finally:
             elapsed = time.time() - start_time
             self.update_metrics(elapsed)
+    
+    def parse_headers(self, header_lines):
+        """Parsea los headers HTTP de la petición"""
+        headers = {}
+        for line in header_lines:
+            if not line:
+                break
+            if ":" in line:
+                key, value = line.split(":", 1)
+                headers[key.strip().lower()] = value.strip()
+        return headers
+    
+    def get_http_date(self):
+        """Retorna la fecha actual en formato HTTP (RFC 9110 Section 5.6.7)"""
+        return formatdate(timeval=None, localtime=False, usegmt=True)
+    
+    def get_file_modified_date(self, file_path):
+        """Retorna la fecha de modificación del archivo en formato HTTP"""
+        mtime = os.path.getmtime(file_path)
+        return formatdate(timeval=mtime, localtime=False, usegmt=True)
 
-    def handle_get(self, path):
+    def handle_get(self, path, include_body=True):
+        """
+        Maneja peticiones GET y HEAD (RFC 9110 Section 9.3)
+        
+        Args:
+            path: Ruta del recurso solicitado
+            include_body: True para GET, False para HEAD
+        """
         # Endpoint especial para métricas (API)
         if path == "/api/metrics":
-            self.send_metrics_json()
+            self.send_metrics_json(include_body)
             return
 
         # Endpoint para resetear métricas
         if path == "/api/reset":
-            self.reset_metrics()
+            self.reset_metrics(include_body)
             return
 
         # Endpoint para info del servidor
         if path == "/api/info":
-            self.send_server_info()
+            self.send_server_info(include_body)
             return
 
+        # Documento por defecto (RFC 9110 Section 7.1)
         if path == "/":
             path = "/index.html"
 
         file_path = Path(PUBLIC_DIR + path)
 
+        # Verificar que el archivo existe y es un archivo regular
         if not file_path.exists() or not file_path.is_file():
-            self.send_response(404, "Not Found")
+            self.send_error_response(404, "Not Found")
+            return
+        
+        # Verificar que no se intenta acceder fuera de PUBLIC_DIR (seguridad)
+        try:
+            file_path.resolve().relative_to(Path(PUBLIC_DIR).resolve())
+        except ValueError:
+            self.send_error_response(403, "Forbidden")
             return
 
         try:
             content_type = self.get_content_type(file_path)
-            with open(file_path, "rb") as f:
-                content = f.read()
-
-            response = (
-                "HTTP/1.1 200 OK\r\n"
-                f"Content-Type: {content_type}\r\n"
-                f"Content-Length: {len(content)}\r\n"
-                "Access-Control-Allow-Origin: *\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-            )
-            self.request.sendall(response.encode("utf-8") + content)
+            file_size = file_path.stat().st_size
+            last_modified = self.get_file_modified_date(file_path)
+            
+            # Construir headers de respuesta según RFC 9110
+            headers = [
+                "HTTP/1.1 200 OK",
+                f"Date: {self.get_http_date()}",
+                f"Server: {SERVER_NAME}",
+                f"Content-Type: {content_type}",
+                f"Content-Length: {file_size}",
+                f"Last-Modified: {last_modified}",
+                "Accept-Ranges: bytes",
+                "Access-Control-Allow-Origin: *",
+                "Connection: close",
+            ]
+            
+            response_headers = "\r\n".join(headers) + "\r\n\r\n"
+            self.request.sendall(response_headers.encode("utf-8"))
+            
+            # Enviar body solo si es GET (no HEAD)
+            if include_body:
+                with open(file_path, "rb") as f:
+                    # Enviar en chunks para archivos grandes
+                    while True:
+                        chunk = f.read(65536)  # 64KB chunks
+                        if not chunk:
+                            break
+                        self.request.sendall(chunk)
 
         except Exception as e:
             print(f"Error reading file: {e}")
-            self.send_response(500, "Internal Server Error")
+            self.send_error_response(500, "Internal Server Error")
 
-    def send_metrics_json(self):
+    def send_json_response(self, data, include_body=True):
+        """Envía una respuesta JSON con headers HTTP/1.1 correctos"""
+        content = json.dumps(data, indent=2)
+        content_bytes = content.encode("utf-8")
+        
+        headers = [
+            "HTTP/1.1 200 OK",
+            f"Date: {self.get_http_date()}",
+            f"Server: {SERVER_NAME}",
+            "Content-Type: application/json; charset=utf-8",
+            f"Content-Length: {len(content_bytes)}",
+            "Access-Control-Allow-Origin: *",
+            "Connection: close",
+        ]
+        
+        response = "\r\n".join(headers) + "\r\n\r\n"
+        self.request.sendall(response.encode("utf-8"))
+        
+        if include_body:
+            self.request.sendall(content_bytes)
+
+    def send_metrics_json(self, include_body=True):
         """Envía métricas como JSON"""
         with lock:
             avg_time = total_response_time.value / request_count.value if request_count.value > 0 else 0
@@ -113,68 +207,56 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
                 "avg_time": round(avg_time, 4),
                 "total_time": round(total_response_time.value, 4)
             }
+        self.send_json_response(metrics, include_body)
 
-        content = json.dumps(metrics)
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            f"Content-Length: {len(content)}\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            f"{content}"
-        )
-        self.request.sendall(response.encode("utf-8"))
-
-    def reset_metrics(self):
+    def reset_metrics(self, include_body=True):
         """Resetea las métricas"""
         with lock:
             request_count.value = 0
             total_response_time.value = 0.0
+        self.send_json_response({"status": "ok", "message": "Metrics reset"}, include_body)
 
-        content = json.dumps({"status": "ok", "message": "Metrics reset"})
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            f"Content-Length: {len(content)}\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            f"{content}"
-        )
-        self.request.sendall(response.encode("utf-8"))
-
-    def send_server_info(self):
+    def send_server_info(self, include_body=True):
         """Envía información del servidor"""
         info = {
             "mode": SERVER_MODE,
             "port": PORT,
             "host": HOST,
+            "server": SERVER_NAME,
             "platform": platform.system(),
-            "forking_available": IS_UNIX_LIKE
+            "forking_available": IS_UNIX_LIKE,
+            "http_version": "HTTP/1.1",
+            "supported_methods": ["GET", "HEAD"]
         }
-        content = json.dumps(info)
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            f"Content-Length: {len(content)}\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            f"{content}"
-        )
-        self.request.sendall(response.encode("utf-8"))
+        self.send_json_response(info, include_body)
 
-    def send_response(self, code, message):
-        response = (
-            f"HTTP/1.1 {code} {message}\r\n"
-            "Content-Type: text/html\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            f"<html><body><h1>{code} {message}</h1></body></html>"
-        )
-        self.request.sendall(response.encode("utf-8"))
+    def send_error_response(self, code, message):
+        """
+        Envía una respuesta de error HTTP con headers correctos (RFC 9110 Section 15)
+        """
+        body = f"""<!DOCTYPE html>
+<html>
+<head><title>{code} {message}</title></head>
+<body>
+<h1>{code} {message}</h1>
+<hr>
+<p>{SERVER_NAME}</p>
+</body>
+</html>"""
+        body_bytes = body.encode("utf-8")
+        
+        headers = [
+            f"HTTP/1.1 {code} {message}",
+            f"Date: {self.get_http_date()}",
+            f"Server: {SERVER_NAME}",
+            "Content-Type: text/html; charset=utf-8",
+            f"Content-Length: {len(body_bytes)}",
+            "Access-Control-Allow-Origin: *",
+            "Connection: close",
+        ]
+        
+        response = "\r\n".join(headers) + "\r\n\r\n"
+        self.request.sendall(response.encode("utf-8") + body_bytes)
 
     def get_content_type(self, file_path):
         ext = file_path.suffix.lower()

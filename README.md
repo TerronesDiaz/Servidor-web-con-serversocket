@@ -1,6 +1,21 @@
 # HTTP Server - Benchmark Comparativo
 
-Servidor HTTP con `socketserver` que permite comparar el rendimiento entre **ThreadingMixIn** y **ForkingMixIn** con mediciones precisas desde el backend.
+Servidor HTTP/1.1 implementado con `socketserver` siguiendo el [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html). Permite comparar el rendimiento entre **ThreadingMixIn** y **ForkingMixIn** con mediciones precisas desde el backend.
+
+## Características HTTP/1.1 Implementadas
+
+Según el [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html):
+
+| Característica | Sección RFC | Estado |
+|----------------|-------------|--------|
+| Método GET | 9.3.1 | ✅ |
+| Método HEAD | 9.3.2 | ✅ |
+| Header `Date` | 6.6.1 | ✅ |
+| Header `Server` | 10.2.4 | ✅ |
+| Header `Content-Type` | 8.3 | ✅ |
+| Header `Content-Length` | 8.6 | ✅ |
+| Header `Last-Modified` | 8.8.2 | ✅ |
+| Códigos de estado | 15 | ✅ (200, 400, 403, 404, 405, 500) |
 
 ## Inicio Rápido
 
@@ -107,6 +122,33 @@ Ejemplo de respuesta `/api/metrics`:
 | WSL | ✅ | ✅ |
 
 **Nota**: En Windows, solo ThreadingMixIn está disponible. Para comparar ambos modos, usa WSL o un sistema Unix-like.
+
+## Prueba de Headers HTTP
+
+Puedes verificar los headers HTTP/1.1 con curl:
+
+```bash
+# Ver headers de respuesta
+curl -I http://localhost:8080/
+
+# Petición HEAD (sin body)
+curl --head http://localhost:8080/png/file_example_PNG_3MB.png
+
+# Ver respuesta completa con headers
+curl -v http://localhost:8080/api/info
+```
+
+Ejemplo de respuesta:
+```
+HTTP/1.1 200 OK
+Date: Thu, 27 Nov 2025 06:30:00 GMT
+Server: PythonHTTPServer/1.0
+Content-Type: text/html; charset=utf-8
+Content-Length: 1234
+Last-Modified: Wed, 26 Nov 2025 10:00:00 GMT
+Accept-Ranges: bytes
+Connection: close
+```
 
 ## Archivos de Prueba
 
