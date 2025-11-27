@@ -82,8 +82,8 @@ La página muestra:
 │   ├── js/
 │   │   └── benchmark.js # Lógica JavaScript
 │   ├── mp4/
-│   │   ├── file_example_MP4_1920_18MG.mp4  (18 MB)
-│   │   └── sample-30s.mp4                   (5 MB)
+│   │   ├── 5898193_Person_Human_3840x2160.mp4  (Video 4K)
+│   │   └── sample-30s.mp4                       (5 MB)
 │   ├── pdf/
 │   │   └── file-example_PDF_1MB.pdf         (1 MB)
 │   └── png/
@@ -157,7 +157,7 @@ Connection: close
 | PDF | 1 MB | Pruebas rápidas |
 | PNG | 3 MB | Pruebas medianas |
 | Video corto | 5 MB | Pruebas de carga |
-| Video HD | 18 MB | Pruebas de rendimiento intensivo |
+| Video 4K | 97.4 MB | Pruebas de rendimiento intensivo |
 
 ## Diferencias entre Modos
 
