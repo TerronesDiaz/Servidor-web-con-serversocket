@@ -179,9 +179,9 @@
                 <ul>
                     <li>Ejecuta <code>python benchmark_server.py</code> para iniciar todo automáticamente</li>
                     <li>Instala dependencias: <code>pip install -r requirements.txt</code></li>
-                    <li>Para videos necesitas <strong>FFmpeg</strong> instalado en el sistema</li>
+                    <li>Videos: Calcula hashes SHA256/MD5 (no requiere FFmpeg)</li>
                     <li>Modo "Paralelo" lanza todas las peticiones simultáneamente</li>
-                    <li><strong>"Procesar (CPU)"</strong>: Imágenes → redimensiona 50% | Videos → extrae thumbnail</li>
+                    <li><strong>"Procesar (CPU)"</strong>: Imágenes → redimensiona 50% | Videos → calcula hashes</li>
                     <li>Sin procesamiento: Threading es más rápido (I/O bound)</li>
                     <li>Con procesamiento: Forking es más rápido (CPU bound)</li>
                 </ul>

@@ -196,7 +196,7 @@ Agrega `?process=true` a cualquier imagen o video:
 # Imagen: redimensiona al 50%
 http://localhost:8080/png/file_example_PNG_3MB.png?process=true
 
-# Video: extrae thumbnail (frame del segundo 1)
+# Video: calcula hashes SHA256/MD5 del archivo completo
 http://localhost:8080/mp4/sample-30s.mp4?process=true
 ```
 
@@ -207,7 +207,7 @@ O usa el checkbox "Procesar (CPU)" en el benchmark.
 | Tipo | Dependencia | Instalación |
 |------|-------------|-------------|
 | Imágenes | Pillow | `pip install Pillow` |
-| Videos | FFmpeg | Instalar desde [ffmpeg.org](https://ffmpeg.org/download.html) |
+| Videos | Ninguna | Incluido en Python (hashlib) |
 
 ### ¿Por qué Forking gana con CPU intensivo?
 
@@ -221,9 +221,13 @@ O usa el checkbox "Procesar (CPU)" en el benchmark.
 - Redimensionado con interpolación LANCZOS
 - Recodificación y compresión
 
-**Procesamiento de videos** (FFmpeg):
-- Decodificación del video
-- Extracción de frame específico
-- Codificación a JPEG
+**Procesamiento de videos** (hashlib + Python puro):
+- Lectura del archivo en chunks
+- Cálculo de hash SHA256 y MD5
+- Suma de bytes (operación Python pura que bloquea el GIL)
 
-Estas operaciones son **CPU-bound** y el GIL de Python impide que Threading las ejecute en paralelo real.
+### ¿Por qué no usar FFmpeg?
+
+FFmpeg se ejecuta como **proceso externo** (`subprocess.run`), lo que significa que Python simplemente espera y **libera el GIL**. Por eso Threading no se ve afectado.
+
+Para demostrar la diferencia real, el procesamiento de video usa **código Python puro** (suma de bytes) que mantiene el GIL bloqueado, forzando a Threading a ejecutar secuencialmente mientras Forking puede usar múltiples cores.

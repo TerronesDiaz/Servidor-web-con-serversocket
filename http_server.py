@@ -21,12 +21,6 @@ except ImportError:
     print("Nota: Pillow no instalado. Procesamiento de imágenes deshabilitado.")
     print("Instala con: pip install Pillow")
 
-# Verificar si FFmpeg está disponible para procesamiento de video
-import shutil
-FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
-if not FFMPEG_AVAILABLE:
-    print("Nota: FFmpeg no encontrado. Procesamiento de video deshabilitado.")
-    print("Instala FFmpeg para habilitar extracción de thumbnails de video.")
 
 HOST = "0.0.0.0"
 PORT = 8080
@@ -179,9 +173,9 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             self.handle_image_processing(file_path, resize_percent, include_body)
             return
         
-        # Si es un video y se solicita procesamiento (extraer thumbnail)
-        if process_media and FFMPEG_AVAILABLE and file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
-            self.handle_video_thumbnail(file_path, include_body)
+        # Si es un video y se solicita procesamiento (calcular hashes - CPU intensivo)
+        if process_media and file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
+            self.handle_video_processing(file_path, include_body)
             return
 
         try:
@@ -287,66 +281,78 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             print(f"Error procesando imagen: {e}")
             self.send_error_response(500, f"Error processing image: {str(e)}")
     
-    def handle_video_thumbnail(self, file_path, include_body=True):
+    def handle_video_processing(self, file_path, include_body=True):
         """
-        Extrae un thumbnail de un video usando FFmpeg (CPU INTENSIVO)
+        Procesa un video: lee bytes y calcula hash/checksum (CPU INTENSIVO EN PYTHON)
+        
+        Esto es intencionalmente CPU-bound en Python para demostrar
+        la diferencia entre Threading y Forking con el GIL.
         
         Args:
             file_path: Ruta del archivo de video
             include_body: True para GET, False para HEAD
         """
-        import subprocess
-        import tempfile
+        import hashlib
         
         try:
-            print(f"[{SERVER_MODE}] Extrayendo thumbnail de video: {file_path.name}")
+            file_size = file_path.stat().st_size
+            print(f"[{SERVER_MODE}] Procesando video: {file_path.name} ({file_size / 1024 / 1024:.1f} MB)")
             
-            # Crear archivo temporal para el thumbnail
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                tmp_path = tmp.name
+            # PROCESAMIENTO CPU INTENSIVO EN PYTHON:
+            # 1. Leer el archivo en chunks
+            # 2. Calcular múltiples hashes (SHA256, MD5) - operaciones CPU-bound
+            # 3. Calcular checksum adicional byte por byte
             
-            # Extraer frame del segundo 1 del video usando FFmpeg
-            # -ss 1: Ir al segundo 1
-            # -vframes 1: Extraer solo 1 frame
-            # -q:v 2: Calidad alta (1-31, menor es mejor)
-            cmd = [
-                'ffmpeg',
-                '-ss', '1',
-                '-i', str(file_path),
-                '-vframes', '1',
-                '-q:v', '2',
-                '-y',  # Sobrescribir si existe
-                tmp_path
-            ]
+            sha256_hash = hashlib.sha256()
+            md5_hash = hashlib.md5()
+            byte_sum = 0
+            chunk_count = 0
             
-            # Ejecutar FFmpeg (CPU intensivo)
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=30
-            )
+            # Leer y procesar el archivo
+            with open(file_path, 'rb') as f:
+                while True:
+                    # Leer chunk de 64KB
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    
+                    # Actualizar hashes (CPU intensivo)
+                    sha256_hash.update(chunk)
+                    md5_hash.update(chunk)
+                    
+                    # Suma de bytes (CPU intensivo - operación Python pura)
+                    # Esto es lo que realmente bloquea el GIL
+                    for byte in chunk:
+                        byte_sum = (byte_sum + byte) % (2**32)
+                    
+                    chunk_count += 1
             
-            if result.returncode != 0:
-                raise Exception(f"FFmpeg error: {result.stderr.decode()[:200]}")
+            # Resultado del procesamiento
+            result = {
+                "file": file_path.name,
+                "size_bytes": file_size,
+                "size_mb": round(file_size / 1024 / 1024, 2),
+                "sha256": sha256_hash.hexdigest(),
+                "md5": md5_hash.hexdigest(),
+                "checksum": byte_sum,
+                "chunks_processed": chunk_count,
+                "server_mode": SERVER_MODE
+            }
             
-            # Leer el thumbnail generado
-            with open(tmp_path, 'rb') as f:
-                content = f.read()
+            content = json.dumps(result, indent=2).encode('utf-8')
             
-            # Eliminar archivo temporal
-            os.unlink(tmp_path)
-            
-            print(f"[{SERVER_MODE}] Thumbnail extraído: {len(content)} bytes")
+            print(f"[{SERVER_MODE}] Video procesado: {chunk_count} chunks, checksum={byte_sum}")
             
             # Construir headers de respuesta
             headers = [
                 "HTTP/1.1 200 OK",
                 f"Date: {self.get_http_date()}",
                 f"Server: {SERVER_NAME}",
-                "Content-Type: image/jpeg",
+                "Content-Type: application/json",
                 f"Content-Length: {len(content)}",
-                "X-Video-Thumbnail: true",
-                f"X-Source-Video: {file_path.name}",
+                "X-Video-Processed: true",
+                f"X-File-Size: {file_size}",
+                f"X-Checksum: {byte_sum}",
                 "Access-Control-Allow-Origin: *",
                 "Connection: close",
             ]
@@ -357,9 +363,6 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             if include_body:
                 self.request.sendall(content)
                 
-        except subprocess.TimeoutExpired:
-            print(f"Error: FFmpeg timeout")
-            self.send_error_response(500, "Video processing timeout")
         except Exception as e:
             print(f"Error procesando video: {e}")
             self.send_error_response(500, f"Error processing video: {str(e)}")
@@ -415,9 +418,8 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             "platform": platform.system(),
             "forking_available": IS_UNIX_LIKE,
             "pillow_available": PILLOW_AVAILABLE,
-            "ffmpeg_available": FFMPEG_AVAILABLE,
             "image_processing": PILLOW_AVAILABLE,
-            "video_processing": FFMPEG_AVAILABLE,
+            "video_processing": True,  # Siempre disponible (usa hashlib)
             "http_version": "HTTP/1.1",
             "supported_methods": ["GET", "HEAD"]
         }

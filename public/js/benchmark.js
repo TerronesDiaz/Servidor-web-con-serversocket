@@ -203,7 +203,7 @@ async function runBenchmark() {
     
     if (processImage) {
         if (file.match(/\.(mp4|avi|mov|mkv)$/i)) {
-            addLog('Modo CPU intensivo: Se extraerá un thumbnail del video con FFmpeg', 'info');
+            addLog('Modo CPU intensivo: Se calcularán hashes SHA256/MD5 del video completo', 'info');
         } else {
             addLog('Modo CPU intensivo: Las imágenes serán redimensionadas al 50%', 'info');
         }
