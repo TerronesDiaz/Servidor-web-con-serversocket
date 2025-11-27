@@ -1,0 +1,5 @@
+# HTTP Server - Benchmark Comparativo
+# Dependencias del proyecto
+
+# Procesamiento de imágenes (para benchmark CPU-intensivo)
+Pillow>=10.0.0

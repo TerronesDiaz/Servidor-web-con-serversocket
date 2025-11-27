@@ -180,6 +180,13 @@ async function runBenchmark() {
     const file = document.getElementById('benchmarkFile').value;
     const count = parseInt(document.getElementById('benchmarkCount').value);
     const parallel = document.getElementById('benchmarkParallel')?.checked !== false;
+    const processImage = document.getElementById('benchmarkProcess')?.checked === true;
+
+    // Verificar que se seleccionó una imagen si se quiere procesar
+    if (processImage && !file.match(/\.(png|jpg|jpeg|gif)$/i)) {
+        addLog('Error: "Procesar imagen" solo funciona con archivos PNG, JPG o GIF', 'error');
+        return;
+    }
 
     // Mostrar progreso
     const progressContainer = document.getElementById('progressContainer');
@@ -191,12 +198,19 @@ async function runBenchmark() {
     btn.disabled = true;
     btn.textContent = 'Ejecutando...';
 
-    addLog(`Iniciando benchmark: ${count} peticiones ${parallel ? 'paralelas' : 'secuenciales'} de ${file}`, 'info');
-    addLog('Las pruebas se ejecutan desde el backend para mediciones precisas', 'info');
+    const modeDesc = processImage ? 'con procesamiento CPU' : 'I/O estándar';
+    addLog(`Iniciando benchmark: ${count} peticiones ${parallel ? 'paralelas' : 'secuenciales'} (${modeDesc})`, 'info');
+    
+    if (processImage) {
+        addLog('Modo CPU intensivo: Las imágenes serán redimensionadas al 50%', 'info');
+        addLog('En este modo, Forking debería superar a Threading', 'info');
+    } else {
+        addLog('Modo I/O: Threading debería ser más rápido', 'info');
+    }
 
     try {
         // Llamar al endpoint de benchmark
-        const url = `http://localhost:${BENCHMARK_PORT}/api/benchmark/run?file=${encodeURIComponent(file)}&requests=${count}&parallel=${parallel}`;
+        const url = `http://localhost:${BENCHMARK_PORT}/api/benchmark/run?file=${encodeURIComponent(file)}&requests=${count}&parallel=${parallel}&process=${processImage}`;
         
         const response = await fetch(url, {
             mode: 'cors',

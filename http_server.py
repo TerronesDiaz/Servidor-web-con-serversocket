@@ -5,10 +5,21 @@ import time
 import sys
 import json
 import platform
+import io
 from pathlib import Path
 from multiprocessing import Value, Lock
 from datetime import datetime, timezone
 from email.utils import formatdate
+from urllib.parse import urlparse, parse_qs
+
+# Intentar importar Pillow para procesamiento de imágenes
+try:
+    from PIL import Image
+    PILLOW_AVAILABLE = True
+except ImportError:
+    PILLOW_AVAILABLE = False
+    print("Nota: Pillow no instalado. Procesamiento de imágenes deshabilitado.")
+    print("Instala con: pip install Pillow")
 
 HOST = "0.0.0.0"
 PORT = 8080
@@ -99,14 +110,26 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
         mtime = os.path.getmtime(file_path)
         return formatdate(timeval=mtime, localtime=False, usegmt=True)
 
-    def handle_get(self, path, include_body=True):
+    def parse_path_and_query(self, full_path):
+        """Parsea la ruta y los query parameters"""
+        parsed = urlparse(full_path)
+        path = parsed.path
+        query_params = parse_qs(parsed.query)
+        # Convertir listas a valores simples
+        params = {k: v[0] if len(v) == 1 else v for k, v in query_params.items()}
+        return path, params
+
+    def handle_get(self, full_path, include_body=True):
         """
         Maneja peticiones GET y HEAD (RFC 9110 Section 9.3)
         
         Args:
-            path: Ruta del recurso solicitado
+            full_path: Ruta completa del recurso (puede incluir query string)
             include_body: True para GET, False para HEAD
         """
+        # Parsear path y query parameters
+        path, params = self.parse_path_and_query(full_path)
+        
         # Endpoint especial para métricas (API)
         if path == "/api/metrics":
             self.send_metrics_json(include_body)
@@ -138,6 +161,15 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             file_path.resolve().relative_to(Path(PUBLIC_DIR).resolve())
         except ValueError:
             self.send_error_response(403, "Forbidden")
+            return
+
+        # Verificar si se solicita procesamiento de imagen
+        process_image = params.get("process") == "true" or params.get("resize")
+        resize_percent = int(params.get("resize", 50)) if params.get("resize") else 50
+        
+        # Si es una imagen y se solicita procesamiento
+        if process_image and PILLOW_AVAILABLE and file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']:
+            self.handle_image_processing(file_path, resize_percent, include_body)
             return
 
         try:
@@ -174,6 +206,74 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print(f"Error reading file: {e}")
             self.send_error_response(500, "Internal Server Error")
+    
+    def handle_image_processing(self, file_path, resize_percent, include_body=True):
+        """
+        Procesa una imagen: redimensiona y comprime (CPU INTENSIVO)
+        Este es el caso donde ForkingMixIn debería superar a ThreadingMixIn
+        
+        Args:
+            file_path: Ruta del archivo de imagen
+            resize_percent: Porcentaje de redimensión (1-100)
+            include_body: True para GET, False para HEAD
+        """
+        try:
+            print(f"[{SERVER_MODE}] Procesando imagen: {file_path.name} al {resize_percent}%")
+            
+            # Abrir imagen con Pillow (CPU intensivo: decodificación)
+            with Image.open(file_path) as img:
+                original_size = img.size
+                
+                # Calcular nuevo tamaño
+                new_width = int(img.width * resize_percent / 100)
+                new_height = int(img.height * resize_percent / 100)
+                
+                # Redimensionar (CPU intensivo: interpolación de píxeles)
+                # Usar LANCZOS para mejor calidad (más CPU)
+                resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+                # Determinar formato de salida
+                if file_path.suffix.lower() == '.png':
+                    output_format = 'PNG'
+                    content_type = 'image/png'
+                else:
+                    output_format = 'JPEG'
+                    content_type = 'image/jpeg'
+                
+                # Guardar en memoria (CPU intensivo: codificación)
+                output_buffer = io.BytesIO()
+                if output_format == 'JPEG':
+                    resized_img.save(output_buffer, format=output_format, quality=85, optimize=True)
+                else:
+                    resized_img.save(output_buffer, format=output_format, optimize=True)
+                
+                content = output_buffer.getvalue()
+                
+                print(f"[{SERVER_MODE}] Imagen procesada: {original_size} -> ({new_width}, {new_height}), {len(content)} bytes")
+            
+            # Construir headers de respuesta
+            headers = [
+                "HTTP/1.1 200 OK",
+                f"Date: {self.get_http_date()}",
+                f"Server: {SERVER_NAME}",
+                f"Content-Type: {content_type}",
+                f"Content-Length: {len(content)}",
+                "X-Image-Processed: true",
+                f"X-Original-Size: {original_size[0]}x{original_size[1]}",
+                f"X-New-Size: {new_width}x{new_height}",
+                "Access-Control-Allow-Origin: *",
+                "Connection: close",
+            ]
+            
+            response_headers = "\r\n".join(headers) + "\r\n\r\n"
+            self.request.sendall(response_headers.encode("utf-8"))
+            
+            if include_body:
+                self.request.sendall(content)
+                
+        except Exception as e:
+            print(f"Error procesando imagen: {e}")
+            self.send_error_response(500, f"Error processing image: {str(e)}")
 
     def send_json_response(self, data, include_body=True):
         """Envía una respuesta JSON con headers HTTP/1.1 correctos"""
@@ -225,6 +325,8 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             "server": SERVER_NAME,
             "platform": platform.system(),
             "forking_available": IS_UNIX_LIKE,
+            "pillow_available": PILLOW_AVAILABLE,
+            "image_processing": PILLOW_AVAILABLE,
             "http_version": "HTTP/1.1",
             "supported_methods": ["GET", "HEAD"]
         }

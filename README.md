@@ -177,4 +177,37 @@ Connection: close
 ## Requisitos
 
 - Python 3.7+
-- No requiere dependencias externas
+- Pillow (para procesamiento de imágenes)
+
+### Instalación de dependencias
+
+```bash
+pip install -r requirements.txt
+```
+
+## Procesamiento de Imágenes (CPU Intensivo)
+
+El servidor incluye la capacidad de **procesar imágenes on-the-fly**, lo cual es CPU intensivo y demuestra cuándo **ForkingMixIn supera a ThreadingMixIn**.
+
+### Uso
+
+Agrega `?process=true` a cualquier imagen:
+```
+http://localhost:8080/png/file_example_PNG_3MB.png?process=true
+```
+
+O usa el checkbox "Procesar imagen" en el benchmark.
+
+### ¿Por qué Forking gana con CPU intensivo?
+
+| Escenario | Ganador | Razón |
+|-----------|---------|-------|
+| I/O (archivos) | Threading | Menor overhead, GIL se libera durante I/O |
+| CPU (procesamiento) | Forking | Sin GIL, paralelismo real en múltiples cores |
+
+El procesamiento de imágenes incluye:
+- Decodificación de la imagen
+- Redimensionado con interpolación LANCZOS
+- Recodificación y compresión
+
+Estas operaciones son **CPU-bound** y el GIL de Python impide que Threading las ejecute en paralelo real.

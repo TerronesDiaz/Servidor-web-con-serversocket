@@ -326,6 +326,11 @@ class BenchmarkRequestHandler(socketserver.BaseRequestHandler):
         
         num_requests = int(params.get("requests", "10"))
         parallel = params.get("parallel", "true").lower() == "true"
+        process_image = params.get("process", "false").lower() == "true"
+        
+        # Si se solicita procesamiento de imagen, agregar query param
+        if process_image:
+            file_path = file_path + "?process=true"
         
         # Ejecutar benchmark en un thread separado para no bloquear
         def run_async():
@@ -338,7 +343,8 @@ class BenchmarkRequestHandler(socketserver.BaseRequestHandler):
             "status": "started",
             "file": file_path,
             "requests": num_requests,
-            "parallel": parallel
+            "parallel": parallel,
+            "process_image": process_image
         }
         self.send_json(response_data)
     

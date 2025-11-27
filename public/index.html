@@ -67,6 +67,12 @@
                                 Paralelo
                             </label>
                         </div>
+                        <div class="control-group">
+                            <label>
+                                <input type="checkbox" id="benchmarkProcess">
+                                Procesar imagen (CPU)
+                            </label>
+                        </div>
                         <button class="btn btn-primary" id="runBenchmark" onclick="runBenchmark()">
                             Ejecutar Benchmark
                         </button>
@@ -172,9 +178,11 @@
                 <h3>Consejos de Uso</h3>
                 <ul>
                     <li>Ejecuta <code>python benchmark_server.py</code> para iniciar todo automáticamente</li>
-                    <li>Las pruebas se ejecutan desde el backend usando sockets raw para mediciones precisas</li>
-                    <li>Modo "Paralelo" lanza todas las peticiones simultáneamente (prueba de concurrencia)</li>
-                    <li>Archivos más grandes y más peticiones muestran mejor las diferencias</li>
+                    <li>Instala Pillow: <code>pip install -r requirements.txt</code></li>
+                    <li>Modo "Paralelo" lanza todas las peticiones simultáneamente</li>
+                    <li><strong>"Procesar imagen"</strong>: Redimensiona la imagen al 50% (CPU intensivo) - Aquí Forking debería ganar</li>
+                    <li>Sin procesamiento: Threading es más rápido (I/O bound)</li>
+                    <li>Con procesamiento: Forking es más rápido (CPU bound)</li>
                 </ul>
             </div>
         </div>
