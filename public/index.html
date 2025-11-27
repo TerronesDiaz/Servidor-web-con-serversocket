@@ -124,13 +124,19 @@
 
             <!-- Archivos de Prueba -->
             <div class="section">
-                <h2>Archivos de Prueba</h2>
+                <h2>
+                    Archivos de Prueba
+                    <label class="header-checkbox">
+                        <input type="checkbox" id="showHeaders">
+                        Ver headers en log
+                    </label>
+                </h2>
                 <div class="files-grid">
                     <div class="file-card">
                         <div class="file-name">Documento PDF (1 MB)</div>
                         <div class="file-path">http://localhost:8080/pdf/file-example_PDF_1MB.pdf</div>
                         <div class="file-actions">
-                            <a href="http://localhost:8080/pdf/file-example_PDF_1MB.pdf" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <button class="btn btn-primary btn-sm" onclick="goToFile('/pdf/file-example_PDF_1MB.pdf')">Ir</button>
                             <a href="/pdf/file-example_PDF_1MB.pdf" class="btn btn-secondary btn-sm" download>Descargar</a>
                             <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/pdf/file-example_PDF_1MB.pdf')">Copiar</button>
                         </div>
@@ -139,7 +145,7 @@
                         <div class="file-name">Imagen PNG (3 MB)</div>
                         <div class="file-path">http://localhost:8080/png/file_example_PNG_3MB.png</div>
                         <div class="file-actions">
-                            <a href="http://localhost:8080/png/file_example_PNG_3MB.png" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <button class="btn btn-primary btn-sm" onclick="goToFile('/png/file_example_PNG_3MB.png')">Ir</button>
                             <a href="/png/file_example_PNG_3MB.png" class="btn btn-secondary btn-sm" download>Descargar</a>
                             <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/png/file_example_PNG_3MB.png')">Copiar</button>
                         </div>
@@ -148,7 +154,7 @@
                         <div class="file-name">Video Corto (5 MB)</div>
                         <div class="file-path">http://localhost:8080/mp4/sample-30s.mp4</div>
                         <div class="file-actions">
-                            <a href="http://localhost:8080/mp4/sample-30s.mp4" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <button class="btn btn-primary btn-sm" onclick="goToFile('/mp4/sample-30s.mp4')">Ir</button>
                             <a href="/mp4/sample-30s.mp4" class="btn btn-secondary btn-sm" download>Descargar</a>
                             <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/mp4/sample-30s.mp4')">Copiar</button>
                         </div>
@@ -157,37 +163,10 @@
                         <div class="file-name">Video 4K (97.4 MB)</div>
                         <div class="file-path">http://localhost:8080/mp4/5898193_Person_Human_3840x2160.mp4</div>
                         <div class="file-actions">
-                            <a href="http://localhost:8080/mp4/5898193_Person_Human_3840x2160.mp4" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <button class="btn btn-primary btn-sm" onclick="goToFile('/mp4/5898193_Person_Human_3840x2160.mp4')">Ir</button>
                             <a href="/mp4/5898193_Person_Human_3840x2160.mp4" class="btn btn-secondary btn-sm" download>Descargar</a>
                             <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/mp4/5898193_Person_Human_3840x2160.mp4')">Copiar</button>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Inspeccionar Headers -->
-            <div class="section">
-                <h2>Inspeccionar Petición HTTP</h2>
-                <div class="inspect-controls">
-                    <div class="control-row">
-                        <div class="control-group">
-                            <label>Archivo:</label>
-                            <select id="inspectFile">
-                                <option value="/pdf/file-example_PDF_1MB.pdf">PDF (1 MB)</option>
-                                <option value="/png/file_example_PNG_3MB.png">PNG (3 MB)</option>
-                                <option value="/mp4/sample-30s.mp4">Video Corto (5 MB)</option>
-                                <option value="/mp4/5898193_Person_Human_3840x2160.mp4">Video 4K (97.4 MB)</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>
-                                <input type="checkbox" id="inspectProcess">
-                                Con procesamiento
-                            </label>
-                        </div>
-                        <button class="btn btn-primary" onclick="inspectRequest()">
-                            Ver Headers
-                        </button>
                     </div>
                 </div>
             </div>

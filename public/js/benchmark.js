@@ -295,80 +295,45 @@ function clearLog() {
 }
 
 /**
- * Inspecciona una petición HTTP y muestra los headers
+ * Navega a un archivo y opcionalmente muestra los headers en el log
  */
-async function inspectRequest() {
-    const file = document.getElementById('inspectFile').value;
-    const process = document.getElementById('inspectProcess')?.checked === true;
+async function goToFile(filePath) {
+    const showHeaders = document.getElementById('showHeaders')?.checked === true;
+    const fullUrl = `http://localhost:${THREADING_PORT}${filePath}`;
     
-    const url = process ? `${file}?process=true` : file;
-    const fullUrl = `http://localhost:${THREADING_PORT}${url}`;
-    
-    addLog(`═══════════════════════════════════════════════════`, 'info');
-    addLog(`PETICIÓN: GET ${url}`, 'info');
-    addLog(`URL completa: ${fullUrl}`, 'info');
-    addLog(`───────────────────────────────────────────────────`, 'info');
-    
-    try {
-        // Hacer petición HEAD para obtener headers sin descargar el archivo
-        const startTime = performance.now();
-        const response = await fetch(fullUrl, {
-            method: 'HEAD',
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-        const elapsed = performance.now() - startTime;
-        
-        // Mostrar línea de estado
-        addLog(`HTTP/1.1 ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+    if (showHeaders) {
+        // Mostrar headers en el log antes de abrir
+        addLog(`═══════════════════════════════════════════════════`, 'info');
+        addLog(`GET ${filePath}`, 'info');
         addLog(`───────────────────────────────────────────────────`, 'info');
         
-        // Mostrar headers
-        addLog(`HEADERS DE RESPUESTA:`, 'info');
-        response.headers.forEach((value, key) => {
-            addLog(`  ${key}: ${value}`, '');
-        });
-        
-        addLog(`───────────────────────────────────────────────────`, 'info');
-        addLog(`Tiempo de respuesta: ${elapsed.toFixed(2)} ms`, 'success');
-        
-        // Si es una petición con procesamiento, hacer GET para ver el body
-        if (process && (file.includes('.mp4') || file.includes('.png') || file.includes('.jpg') || file.includes('.pdf'))) {
-            addLog(`───────────────────────────────────────────────────`, 'info');
-            addLog(`BODY DE RESPUESTA (procesado):`, 'info');
-            
-            const bodyResponse = await fetch(fullUrl, {
-                method: 'GET',
+        try {
+            const startTime = performance.now();
+            const response = await fetch(fullUrl, {
+                method: 'HEAD',
                 mode: 'cors',
                 cache: 'no-cache'
             });
+            const elapsed = performance.now() - startTime;
             
-            const contentType = bodyResponse.headers.get('content-type');
+            addLog(`HTTP/1.1 ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+            addLog(`───────────────────────────────────────────────────`, 'info');
             
-            if (contentType && contentType.includes('application/json')) {
-                const json = await bodyResponse.json();
-                // Mostrar JSON formateado
-                Object.entries(json).forEach(([key, value]) => {
-                    addLog(`  "${key}": ${JSON.stringify(value)}`, '');
-                });
-            } else if (contentType && contentType.includes('image/')) {
-                addLog(`  [Imagen procesada - ${bodyResponse.headers.get('content-length')} bytes]`, '');
-                const originalSize = bodyResponse.headers.get('x-original-size');
-                const newSize = bodyResponse.headers.get('x-new-size');
-                if (originalSize && newSize) {
-                    addLog(`  Tamaño original: ${originalSize}`, '');
-                    addLog(`  Tamaño nuevo: ${newSize}`, '');
-                }
-            }
+            response.headers.forEach((value, key) => {
+                addLog(`${key}: ${value}`, '');
+            });
+            
+            addLog(`───────────────────────────────────────────────────`, 'info');
+            addLog(`Tiempo: ${elapsed.toFixed(2)} ms`, 'success');
+            addLog(`═══════════════════════════════════════════════════`, 'info');
+            
+        } catch (e) {
+            addLog(`ERROR: ${e.message}`, 'error');
         }
-        
-        addLog(`═══════════════════════════════════════════════════`, 'info');
-        
-    } catch (e) {
-        addLog(`ERROR: ${e.message}`, 'error');
-        addLog(`Verifica que el servidor esté corriendo`, 'error');
-        addLog(`═══════════════════════════════════════════════════`, 'info');
     }
+    
+    // Abrir en nueva pestaña
+    window.open(fullUrl, '_blank');
 }
 
 /**

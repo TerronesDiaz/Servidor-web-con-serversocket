@@ -357,16 +357,19 @@ body {
     word-break: break-all;
 }
 
-/* Inspeccionar Headers */
-.inspect-controls {
-    margin-bottom: 15px;
+/* Checkbox en header de sección */
+.header-checkbox {
+    font-size: 0.8em;
+    font-weight: normal;
+    margin-left: 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
 }
 
-.inspect-controls .control-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    align-items: center;
+.header-checkbox input {
+    cursor: pointer;
 }
 
 .log-entry.success {
