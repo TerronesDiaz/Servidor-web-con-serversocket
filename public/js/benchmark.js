@@ -182,9 +182,9 @@ async function runBenchmark() {
     const parallel = document.getElementById('benchmarkParallel')?.checked !== false;
     const processImage = document.getElementById('benchmarkProcess')?.checked === true;
 
-    // Verificar que se seleccionó una imagen o video si se quiere procesar
-    if (processImage && !file.match(/\.(png|jpg|jpeg|gif|mp4|avi|mov|mkv)$/i)) {
-        addLog('Error: "Procesar" solo funciona con imágenes (PNG, JPG, GIF) o videos (MP4)', 'error');
+    // Verificar que se seleccionó un archivo procesable
+    if (processImage && !file.match(/\.(png|jpg|jpeg|gif|mp4|avi|mov|mkv|pdf)$/i)) {
+        addLog('Error: "Procesar" solo funciona con imágenes, videos o PDFs', 'error');
         return;
     }
 
@@ -204,6 +204,8 @@ async function runBenchmark() {
     if (processImage) {
         if (file.match(/\.(mp4|avi|mov|mkv)$/i)) {
             addLog('Modo CPU intensivo: Se calcularán hashes SHA256/MD5 del video completo', 'info');
+        } else if (file.match(/\.pdf$/i)) {
+            addLog('Modo CPU intensivo: Se calcularán hashes SHA256/MD5/SHA1 del PDF', 'info');
         } else {
             addLog('Modo CPU intensivo: Las imágenes serán redimensionadas al 50%', 'info');
         }
@@ -331,7 +333,7 @@ async function inspectRequest() {
         addLog(`Tiempo de respuesta: ${elapsed.toFixed(2)} ms`, 'success');
         
         // Si es una petición con procesamiento, hacer GET para ver el body
-        if (process && (file.includes('.mp4') || file.includes('.png') || file.includes('.jpg'))) {
+        if (process && (file.includes('.mp4') || file.includes('.png') || file.includes('.jpg') || file.includes('.pdf'))) {
             addLog(`───────────────────────────────────────────────────`, 'info');
             addLog(`BODY DE RESPUESTA (procesado):`, 'info');
             

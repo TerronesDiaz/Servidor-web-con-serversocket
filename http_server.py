@@ -177,6 +177,11 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
         if process_media and file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
             self.handle_video_processing(file_path, include_body)
             return
+        
+        # Si es un PDF y se solicita procesamiento (calcular hashes - CPU intensivo)
+        if process_media and file_path.suffix.lower() == '.pdf':
+            self.handle_pdf_processing(file_path, include_body)
+            return
 
         try:
             content_type = self.get_content_type(file_path)
@@ -366,6 +371,101 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print(f"Error procesando video: {e}")
             self.send_error_response(500, f"Error processing video: {str(e)}")
+    
+    def handle_pdf_processing(self, file_path, include_body=True):
+        """
+        Procesa un PDF: lee bytes y calcula hash/checksum (CPU INTENSIVO EN PYTHON)
+        Similar al procesamiento de video pero para documentos PDF.
+        
+        Args:
+            file_path: Ruta del archivo PDF
+            include_body: True para GET, False para HEAD
+        """
+        import hashlib
+        
+        try:
+            file_size = file_path.stat().st_size
+            print(f"[{SERVER_MODE}] Procesando PDF: {file_path.name} ({file_size / 1024:.1f} KB)")
+            
+            # PROCESAMIENTO CPU INTENSIVO EN PYTHON:
+            # 1. Leer el archivo en chunks
+            # 2. Calcular múltiples hashes (SHA256, MD5, SHA1) - operaciones CPU-bound
+            # 3. Calcular checksum adicional byte por byte
+            # 4. Contar páginas (buscando /Page en el PDF)
+            
+            sha256_hash = hashlib.sha256()
+            md5_hash = hashlib.md5()
+            sha1_hash = hashlib.sha1()
+            byte_sum = 0
+            chunk_count = 0
+            page_markers = 0
+            
+            # Leer y procesar el archivo
+            with open(file_path, 'rb') as f:
+                content_bytes = f.read()
+            
+            # Contar marcadores de página (aproximación)
+            page_markers = content_bytes.count(b'/Type /Page') + content_bytes.count(b'/Type/Page')
+            
+            # Procesar en chunks para simular carga CPU
+            chunk_size = 65536
+            for i in range(0, len(content_bytes), chunk_size):
+                chunk = content_bytes[i:i+chunk_size]
+                
+                # Actualizar hashes (CPU intensivo)
+                sha256_hash.update(chunk)
+                md5_hash.update(chunk)
+                sha1_hash.update(chunk)
+                
+                # Suma de bytes (CPU intensivo - operación Python pura)
+                for byte in chunk:
+                    byte_sum = (byte_sum + byte) % (2**32)
+                
+                chunk_count += 1
+            
+            # Resultado del procesamiento
+            result = {
+                "file": file_path.name,
+                "type": "PDF Document",
+                "size_bytes": file_size,
+                "size_kb": round(file_size / 1024, 2),
+                "estimated_pages": page_markers if page_markers > 0 else "Unknown",
+                "sha256": sha256_hash.hexdigest(),
+                "md5": md5_hash.hexdigest(),
+                "sha1": sha1_hash.hexdigest(),
+                "checksum": byte_sum,
+                "chunks_processed": chunk_count,
+                "server_mode": SERVER_MODE
+            }
+            
+            content = json.dumps(result, indent=2).encode('utf-8')
+            
+            print(f"[{SERVER_MODE}] PDF procesado: {chunk_count} chunks, ~{page_markers} páginas, checksum={byte_sum}")
+            
+            # Construir headers de respuesta
+            headers = [
+                "HTTP/1.1 200 OK",
+                f"Date: {self.get_http_date()}",
+                f"Server: {SERVER_NAME}",
+                "Content-Type: application/json",
+                f"Content-Length: {len(content)}",
+                "X-PDF-Processed: true",
+                f"X-File-Size: {file_size}",
+                f"X-Estimated-Pages: {page_markers}",
+                f"X-Checksum: {byte_sum}",
+                "Access-Control-Allow-Origin: *",
+                "Connection: close",
+            ]
+            
+            response_headers = "\r\n".join(headers) + "\r\n\r\n"
+            self.request.sendall(response_headers.encode("utf-8"))
+            
+            if include_body:
+                self.request.sendall(content)
+                
+        except Exception as e:
+            print(f"Error procesando PDF: {e}")
+            self.send_error_response(500, f"Error processing PDF: {str(e)}")
 
     def send_json_response(self, data, include_body=True):
         """Envía una respuesta JSON con headers HTTP/1.1 correctos"""
