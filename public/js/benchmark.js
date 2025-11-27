@@ -284,6 +284,92 @@ function copyToClipboard(text) {
 }
 
 /**
+ * Limpia el log de actividad
+ */
+function clearLog() {
+    const container = document.getElementById('logContainer');
+    container.innerHTML = '';
+    addLog('Log limpiado', 'info');
+}
+
+/**
+ * Inspecciona una petición HTTP y muestra los headers
+ */
+async function inspectRequest() {
+    const file = document.getElementById('inspectFile').value;
+    const process = document.getElementById('inspectProcess')?.checked === true;
+    
+    const url = process ? `${file}?process=true` : file;
+    const fullUrl = `http://localhost:${THREADING_PORT}${url}`;
+    
+    addLog(`═══════════════════════════════════════════════════`, 'info');
+    addLog(`PETICIÓN: GET ${url}`, 'info');
+    addLog(`URL completa: ${fullUrl}`, 'info');
+    addLog(`───────────────────────────────────────────────────`, 'info');
+    
+    try {
+        // Hacer petición HEAD para obtener headers sin descargar el archivo
+        const startTime = performance.now();
+        const response = await fetch(fullUrl, {
+            method: 'HEAD',
+            mode: 'cors',
+            cache: 'no-cache'
+        });
+        const elapsed = performance.now() - startTime;
+        
+        // Mostrar línea de estado
+        addLog(`HTTP/1.1 ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+        addLog(`───────────────────────────────────────────────────`, 'info');
+        
+        // Mostrar headers
+        addLog(`HEADERS DE RESPUESTA:`, 'info');
+        response.headers.forEach((value, key) => {
+            addLog(`  ${key}: ${value}`, '');
+        });
+        
+        addLog(`───────────────────────────────────────────────────`, 'info');
+        addLog(`Tiempo de respuesta: ${elapsed.toFixed(2)} ms`, 'success');
+        
+        // Si es una petición con procesamiento, hacer GET para ver el body
+        if (process && (file.includes('.mp4') || file.includes('.png') || file.includes('.jpg'))) {
+            addLog(`───────────────────────────────────────────────────`, 'info');
+            addLog(`BODY DE RESPUESTA (procesado):`, 'info');
+            
+            const bodyResponse = await fetch(fullUrl, {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache'
+            });
+            
+            const contentType = bodyResponse.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                const json = await bodyResponse.json();
+                // Mostrar JSON formateado
+                Object.entries(json).forEach(([key, value]) => {
+                    addLog(`  "${key}": ${JSON.stringify(value)}`, '');
+                });
+            } else if (contentType && contentType.includes('image/')) {
+                addLog(`  [Imagen procesada - ${bodyResponse.headers.get('content-length')} bytes]`, '');
+                const originalSize = bodyResponse.headers.get('x-original-size');
+                const newSize = bodyResponse.headers.get('x-new-size');
+                if (originalSize && newSize) {
+                    addLog(`  Tamaño original: ${originalSize}`, '');
+                    addLog(`  Tamaño nuevo: ${newSize}`, '');
+                }
+            }
+        }
+        
+        addLog(`═══════════════════════════════════════════════════`, 'info');
+        
+    } catch (e) {
+        addLog(`ERROR: ${e.message}`, 'error');
+        addLog(`Verifica que el servidor esté corriendo`, 'error');
+        addLog(`═══════════════════════════════════════════════════`, 'info');
+    }
+}
+
+/**
  * Inicialización cuando el DOM está listo
  */
 document.addEventListener('DOMContentLoaded', function() {
