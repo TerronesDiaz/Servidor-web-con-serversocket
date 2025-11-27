@@ -185,18 +185,29 @@ Connection: close
 pip install -r requirements.txt
 ```
 
-## Procesamiento de Imágenes (CPU Intensivo)
+## Procesamiento de Media (CPU Intensivo)
 
-El servidor incluye la capacidad de **procesar imágenes on-the-fly**, lo cual es CPU intensivo y demuestra cuándo **ForkingMixIn supera a ThreadingMixIn**.
+El servidor incluye la capacidad de **procesar imágenes y videos on-the-fly**, lo cual es CPU intensivo y demuestra cuándo **ForkingMixIn supera a ThreadingMixIn**.
 
 ### Uso
 
-Agrega `?process=true` a cualquier imagen:
-```
+Agrega `?process=true` a cualquier imagen o video:
+```bash
+# Imagen: redimensiona al 50%
 http://localhost:8080/png/file_example_PNG_3MB.png?process=true
+
+# Video: extrae thumbnail (frame del segundo 1)
+http://localhost:8080/mp4/sample-30s.mp4?process=true
 ```
 
-O usa el checkbox "Procesar imagen" en el benchmark.
+O usa el checkbox "Procesar (CPU)" en el benchmark.
+
+### Requisitos
+
+| Tipo | Dependencia | Instalación |
+|------|-------------|-------------|
+| Imágenes | Pillow | `pip install Pillow` |
+| Videos | FFmpeg | Instalar desde [ffmpeg.org](https://ffmpeg.org/download.html) |
 
 ### ¿Por qué Forking gana con CPU intensivo?
 
@@ -205,9 +216,14 @@ O usa el checkbox "Procesar imagen" en el benchmark.
 | I/O (archivos) | Threading | Menor overhead, GIL se libera durante I/O |
 | CPU (procesamiento) | Forking | Sin GIL, paralelismo real en múltiples cores |
 
-El procesamiento de imágenes incluye:
+**Procesamiento de imágenes** (Pillow):
 - Decodificación de la imagen
 - Redimensionado con interpolación LANCZOS
 - Recodificación y compresión
+
+**Procesamiento de videos** (FFmpeg):
+- Decodificación del video
+- Extracción de frame específico
+- Codificación a JPEG
 
 Estas operaciones son **CPU-bound** y el GIL de Python impide que Threading las ejecute en paralelo real.

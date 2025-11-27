@@ -182,9 +182,9 @@ async function runBenchmark() {
     const parallel = document.getElementById('benchmarkParallel')?.checked !== false;
     const processImage = document.getElementById('benchmarkProcess')?.checked === true;
 
-    // Verificar que se seleccionó una imagen si se quiere procesar
-    if (processImage && !file.match(/\.(png|jpg|jpeg|gif)$/i)) {
-        addLog('Error: "Procesar imagen" solo funciona con archivos PNG, JPG o GIF', 'error');
+    // Verificar que se seleccionó una imagen o video si se quiere procesar
+    if (processImage && !file.match(/\.(png|jpg|jpeg|gif|mp4|avi|mov|mkv)$/i)) {
+        addLog('Error: "Procesar" solo funciona con imágenes (PNG, JPG, GIF) o videos (MP4)', 'error');
         return;
     }
 
@@ -202,7 +202,11 @@ async function runBenchmark() {
     addLog(`Iniciando benchmark: ${count} peticiones ${parallel ? 'paralelas' : 'secuenciales'} (${modeDesc})`, 'info');
     
     if (processImage) {
-        addLog('Modo CPU intensivo: Las imágenes serán redimensionadas al 50%', 'info');
+        if (file.match(/\.(mp4|avi|mov|mkv)$/i)) {
+            addLog('Modo CPU intensivo: Se extraerá un thumbnail del video con FFmpeg', 'info');
+        } else {
+            addLog('Modo CPU intensivo: Las imágenes serán redimensionadas al 50%', 'info');
+        }
         addLog('En este modo, Forking debería superar a Threading', 'info');
     } else {
         addLog('Modo I/O: Threading debería ser más rápido', 'info');

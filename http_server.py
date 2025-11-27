@@ -21,6 +21,13 @@ except ImportError:
     print("Nota: Pillow no instalado. Procesamiento de imágenes deshabilitado.")
     print("Instala con: pip install Pillow")
 
+# Verificar si FFmpeg está disponible para procesamiento de video
+import shutil
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+if not FFMPEG_AVAILABLE:
+    print("Nota: FFmpeg no encontrado. Procesamiento de video deshabilitado.")
+    print("Instala FFmpeg para habilitar extracción de thumbnails de video.")
+
 HOST = "0.0.0.0"
 PORT = 8080
 BUFFER_SIZE = 4096
@@ -163,13 +170,18 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             self.send_error_response(403, "Forbidden")
             return
 
-        # Verificar si se solicita procesamiento de imagen
-        process_image = params.get("process") == "true" or params.get("resize")
+        # Verificar si se solicita procesamiento
+        process_media = params.get("process") == "true" or params.get("resize")
         resize_percent = int(params.get("resize", 50)) if params.get("resize") else 50
         
         # Si es una imagen y se solicita procesamiento
-        if process_image and PILLOW_AVAILABLE and file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']:
+        if process_media and PILLOW_AVAILABLE and file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']:
             self.handle_image_processing(file_path, resize_percent, include_body)
+            return
+        
+        # Si es un video y se solicita procesamiento (extraer thumbnail)
+        if process_media and FFMPEG_AVAILABLE and file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
+            self.handle_video_thumbnail(file_path, include_body)
             return
 
         try:
@@ -274,6 +286,83 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print(f"Error procesando imagen: {e}")
             self.send_error_response(500, f"Error processing image: {str(e)}")
+    
+    def handle_video_thumbnail(self, file_path, include_body=True):
+        """
+        Extrae un thumbnail de un video usando FFmpeg (CPU INTENSIVO)
+        
+        Args:
+            file_path: Ruta del archivo de video
+            include_body: True para GET, False para HEAD
+        """
+        import subprocess
+        import tempfile
+        
+        try:
+            print(f"[{SERVER_MODE}] Extrayendo thumbnail de video: {file_path.name}")
+            
+            # Crear archivo temporal para el thumbnail
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                tmp_path = tmp.name
+            
+            # Extraer frame del segundo 1 del video usando FFmpeg
+            # -ss 1: Ir al segundo 1
+            # -vframes 1: Extraer solo 1 frame
+            # -q:v 2: Calidad alta (1-31, menor es mejor)
+            cmd = [
+                'ffmpeg',
+                '-ss', '1',
+                '-i', str(file_path),
+                '-vframes', '1',
+                '-q:v', '2',
+                '-y',  # Sobrescribir si existe
+                tmp_path
+            ]
+            
+            # Ejecutar FFmpeg (CPU intensivo)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg error: {result.stderr.decode()[:200]}")
+            
+            # Leer el thumbnail generado
+            with open(tmp_path, 'rb') as f:
+                content = f.read()
+            
+            # Eliminar archivo temporal
+            os.unlink(tmp_path)
+            
+            print(f"[{SERVER_MODE}] Thumbnail extraído: {len(content)} bytes")
+            
+            # Construir headers de respuesta
+            headers = [
+                "HTTP/1.1 200 OK",
+                f"Date: {self.get_http_date()}",
+                f"Server: {SERVER_NAME}",
+                "Content-Type: image/jpeg",
+                f"Content-Length: {len(content)}",
+                "X-Video-Thumbnail: true",
+                f"X-Source-Video: {file_path.name}",
+                "Access-Control-Allow-Origin: *",
+                "Connection: close",
+            ]
+            
+            response_headers = "\r\n".join(headers) + "\r\n\r\n"
+            self.request.sendall(response_headers.encode("utf-8"))
+            
+            if include_body:
+                self.request.sendall(content)
+                
+        except subprocess.TimeoutExpired:
+            print(f"Error: FFmpeg timeout")
+            self.send_error_response(500, "Video processing timeout")
+        except Exception as e:
+            print(f"Error procesando video: {e}")
+            self.send_error_response(500, f"Error processing video: {str(e)}")
 
     def send_json_response(self, data, include_body=True):
         """Envía una respuesta JSON con headers HTTP/1.1 correctos"""
@@ -326,7 +415,9 @@ class HTTPRequestHandler(socketserver.BaseRequestHandler):
             "platform": platform.system(),
             "forking_available": IS_UNIX_LIKE,
             "pillow_available": PILLOW_AVAILABLE,
+            "ffmpeg_available": FFMPEG_AVAILABLE,
             "image_processing": PILLOW_AVAILABLE,
+            "video_processing": FFMPEG_AVAILABLE,
             "http_version": "HTTP/1.1",
             "supported_methods": ["GET", "HEAD"]
         }
