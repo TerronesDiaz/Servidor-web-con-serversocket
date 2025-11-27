@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benchmark - HTTP Server</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Benchmark Comparativo</h1>
+            <p>ThreadingMixIn vs ForkingMixIn - Pruebas de Rendimiento</p>
+        </div>
+
+        <div class="main">
+            <!-- Estado de Servidores -->
+            <div class="section">
+                <h2>Estado de Servidores</h2>
+                <div class="servers-grid">
+                    <div class="server-card threading">
+                        <h3>
+                            <span class="status-dot checking" id="threadingStatus"></span>
+                            Threading (Puerto 8080)
+                        </h3>
+                        <div class="server-info">
+                            <div>Modo: Multihilo</div>
+                            <div>Requests: <span id="threadingRequests">0</span></div>
+                            <div>Tiempo promedio: <span id="threadingAvg">0.0000</span>s</div>
+                        </div>
+                    </div>
+                    <div class="server-card forking">
+                        <h3>
+                            <span class="status-dot checking" id="forkingStatus"></span>
+                            Forking (Puerto 8081)
+                        </h3>
+                        <div class="server-info">
+                            <div>Modo: Multiproceso</div>
+                            <div>Requests: <span id="forkingRequests">0</span></div>
+                            <div>Tiempo promedio: <span id="forkingAvg">0.0000</span>s</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controles de Benchmark -->
+            <div class="section">
+                <h2>Ejecutar Benchmark</h2>
+                <div class="benchmark-controls">
+                    <div class="control-row">
+                        <div class="control-group">
+                            <label>Archivo:</label>
+                            <select id="benchmarkFile">
+                                <option value="/pdf/file-example_PDF_1MB.pdf">PDF (1 MB)</option>
+                                <option value="/png/file_example_PNG_3MB.png">PNG (3 MB)</option>
+                                <option value="/mp4/sample-30s.mp4">Video Corto (5 MB)</option>
+                                <option value="/mp4/file_example_MP4_1920_18MG.mp4">Video HD (18 MB)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Peticiones:</label>
+                            <input type="number" id="benchmarkCount" value="10" min="1" max="100">
+                        </div>
+                        <div class="control-group">
+                            <label>
+                                <input type="checkbox" id="benchmarkParallel" checked>
+                                Paralelo
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" id="runBenchmark" onclick="runBenchmark()">
+                            Ejecutar Benchmark
+                        </button>
+                        <button class="btn btn-secondary" onclick="resetAll()">
+                            Reiniciar
+                        </button>
+                    </div>
+
+                    <div class="progress-container" id="progressContainer">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Preparando...</div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Resultados -->
+                <table class="results-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Métrica</th>
+                            <th>Threading</th>
+                            <th>Forking</th>
+                            <th>Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Total Peticiones</td>
+                            <td class="metric-value threading" id="resultThreadingReqs">-</td>
+                            <td class="metric-value forking" id="resultForkingReqs">-</td>
+                            <td id="diffReqs">-</td>
+                        </tr>
+                        <tr>
+                            <td>Tiempo Promedio</td>
+                            <td class="metric-value threading" id="resultThreadingAvg">-</td>
+                            <td class="metric-value forking" id="resultForkingAvg">-</td>
+                            <td id="diffAvg">-</td>
+                        </tr>
+                        <tr>
+                            <td>Tiempo Total</td>
+                            <td class="metric-value threading" id="resultThreadingTotal">-</td>
+                            <td class="metric-value forking" id="resultForkingTotal">-</td>
+                            <td id="diffTotal">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Archivos de Prueba -->
+            <div class="section">
+                <h2>Archivos de Prueba</h2>
+                <div class="files-grid">
+                    <div class="file-card">
+                        <div class="file-name">Documento PDF (1 MB)</div>
+                        <div class="file-path">http://localhost:8080/pdf/file-example_PDF_1MB.pdf</div>
+                        <div class="file-actions">
+                            <a href="http://localhost:8080/pdf/file-example_PDF_1MB.pdf" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <a href="/pdf/file-example_PDF_1MB.pdf" class="btn btn-secondary btn-sm" download>Descargar</a>
+                            <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/pdf/file-example_PDF_1MB.pdf')">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="file-card">
+                        <div class="file-name">Imagen PNG (3 MB)</div>
+                        <div class="file-path">http://localhost:8080/png/file_example_PNG_3MB.png</div>
+                        <div class="file-actions">
+                            <a href="http://localhost:8080/png/file_example_PNG_3MB.png" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <a href="/png/file_example_PNG_3MB.png" class="btn btn-secondary btn-sm" download>Descargar</a>
+                            <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/png/file_example_PNG_3MB.png')">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="file-card">
+                        <div class="file-name">Video Corto (5 MB)</div>
+                        <div class="file-path">http://localhost:8080/mp4/sample-30s.mp4</div>
+                        <div class="file-actions">
+                            <a href="http://localhost:8080/mp4/sample-30s.mp4" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <a href="/mp4/sample-30s.mp4" class="btn btn-secondary btn-sm" download>Descargar</a>
+                            <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/mp4/sample-30s.mp4')">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="file-card">
+                        <div class="file-name">Video HD (18 MB)</div>
+                        <div class="file-path">http://localhost:8080/mp4/file_example_MP4_1920_18MG.mp4</div>
+                        <div class="file-actions">
+                            <a href="http://localhost:8080/mp4/file_example_MP4_1920_18MG.mp4" class="btn btn-primary btn-sm" target="_blank">Ir</a>
+                            <a href="/mp4/file_example_MP4_1920_18MG.mp4" class="btn btn-secondary btn-sm" download>Descargar</a>
+                            <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://localhost:8080/mp4/file_example_MP4_1920_18MG.mp4')">Copiar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log -->
+            <div class="section">
+                <h2>Log de Actividad</h2>
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry info">Sistema iniciado. Verificando servidores...</div>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="tips">
+                <h3>Consejos de Uso</h3>
+                <ul>
+                    <li>Ejecuta <code>python benchmark_server.py</code> para iniciar todo automáticamente</li>
+                    <li>Las pruebas se ejecutan desde el backend usando sockets raw para mediciones precisas</li>
+                    <li>Modo "Paralelo" lanza todas las peticiones simultáneamente (prueba de concurrencia)</li>
+                    <li>Archivos más grandes y más peticiones muestran mejor las diferencias</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/benchmark.js"></script>
+</body>
+</html>
